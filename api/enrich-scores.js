@@ -169,6 +169,22 @@ module.exports = async function handler(req, res) {
     if (i < candidates.length - 1) await sleep(12000);
   }
 
+  // Registro en el journal para poder medir a futuro el track record real
+  // del sistema (probabilidad de acierto basada en resultados propios, no inventada)
+  const journalRows = scoreRows.map((s) => ({
+    asset_id: s.asset_id,
+    date_recommended: today,
+    radar_mode: s.radar_mode,
+    score_al_momento: s.score_total,
+    entrada: s.entrada_sugerida,
+    stop_loss: s.stop_loss,
+    objetivo: s.objetivo_sugerido,
+    cerrado: false,
+  }));
+  if (journalRows.length > 0) {
+    await supabaseRequest('recommendation_journal', { method: 'POST', body: journalRows });
+  }
+
   await supabaseRequest('scores?on_conflict=asset_id,date,radar_mode', {
     method: 'POST',
     body: scoreRows,
