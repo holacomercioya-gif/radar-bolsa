@@ -7,10 +7,17 @@
     {
       "path": "/api/enrich-scores",
       "schedule": "10 21 * * 1-5"
+    },
+    {
+      "path": "/api/enrich-longterm",
+      "schedule": "20 21 * * 1-5"
     }
   ],
   "functions": {
     "api/enrich-scores.js": {
+      "maxDuration": 60
+    },
+    "api/enrich-longterm.js": {
       "maxDuration": 60
     }
   }
