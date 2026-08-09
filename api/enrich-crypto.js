@@ -41,13 +41,20 @@ async function supabaseRequest(path, { method = 'GET', body, prefer } = {}) {
 }
 
 async function fetchTopCoins(today) {
+  const cryptoAssets = await supabaseRequest('assets?market=eq.CRYPTO&select=id,ticker');
+  if (!cryptoAssets || cryptoAssets.length === 0) return [];
+
+  const idList = cryptoAssets.map((a) => a.id).join(',');
+  const idToTicker = new Map(cryptoAssets.map((a) => [a.id, a.ticker]));
+
   const rows = await supabaseRequest(
-    `daily_prices?date=eq.${today}&select=close,pct_change,assets(id,ticker,market)&order=close.desc&limit=100`
+    `daily_prices?date=eq.${today}&asset_id=in.(${idList})&select=asset_id,close,pct_change&order=close.desc&limit=100`
   );
+
   return rows
-    .filter((r) => r.assets && r.assets.market === 'CRYPTO' && r.pct_change != null)
+    .filter((r) => r.pct_change != null)
     .slice(0, TOP_N)
-    .map((r) => ({ assetId: r.assets.id, ticker: r.assets.ticker, close: r.close, pctChange: r.pct_change }));
+    .map((r) => ({ assetId: r.asset_id, ticker: idToTicker.get(r.asset_id), close: r.close, pctChange: r.pct_change }));
 }
 
 // RSI de 14 períodos, método clásico (Wilder simplificado con promedio simple)
