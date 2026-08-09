@@ -10,7 +10,7 @@
   :root{
     --bg:#0A0E14; --surface:#11161F; --surface-2:#161C27; --line:#232B38;
     --text:#E8ECF1; --muted:#7A8494; --muted-2:#525C6B;
-    --green:#3ED9A0; --coral:#FF6B4A; --gold:#F0B429; --blue:#5B8CFF;
+    --green:#3ED9A0; --coral:#FF6B4A; --gold:#F0B429; --blue:#5B8CFF; --purple:#B98CFF;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; padding-bottom:60px;}
@@ -77,6 +77,10 @@
   .hero-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; padding-top:12px; border-top:1px solid var(--line);}
   .hero-grid .l{font-size:9.5px; color:var(--muted-2); font-family:'JetBrains Mono'; margin-bottom:2px;}
   .hero-grid .v{font-family:'JetBrains Mono'; font-size:12.5px; font-weight:600;}
+  .hero-purple{border-color:rgba(185,140,255,.4); background:linear-gradient(160deg, rgba(185,140,255,.08), var(--surface) 55%);}
+  .hero-purple .hero-label{color:var(--purple, #B98CFF);}
+  .hero-purple .hero-score{color:var(--purple, #B98CFF);}
+
   .hero-blue{border-color:rgba(91,140,255,.4); background:linear-gradient(160deg, rgba(91,140,255,.08), var(--surface) 55%);}
   .hero-blue .hero-label{color:var(--blue);}
   .hero-blue .hero-score{color:var(--blue);}
@@ -173,6 +177,12 @@
 
   <div class="sec-label">Criptomonedas · Top movimientos 24h</div>
   <div id="cryptoList" class="loading">Cargando criptomonedas…</div>
+
+  <div class="sec-label">Recomendado · Cripto</div>
+  <div id="cryptoHeroBox" class="loading">Buscando la mejor oportunidad…</div>
+
+  <div class="sec-label">Top 5 · Cripto</div>
+  <div id="cryptoTop5Box" class="loading">Cargando ranking…</div>
 
   <div class="disclaimer">
     <b>El sistema detecta variaciones del día según los parámetros configurados. No garantiza resultados ni constituye asesoramiento financiero.</b><br><br>
@@ -534,8 +544,80 @@
     }
   }
 
+  async function loadCryptoScores() {
+    const heroBox = document.getElementById('cryptoHeroBox');
+    const top5Box = document.getElementById('cryptoTop5Box');
+    try {
+      const rows = await sb(
+        `scores?radar_mode=eq.cripto_corto&order=date.desc,score_total.desc&limit=5&select=score_total,momentum,tecnico,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,name)`
+      );
+      if (!rows || rows.length === 0) {
+        heroBox.outerHTML = `<div class="hero-pending" id="cryptoHeroBox">Todavía no hay score de cripto calculado — se activa después del próximo sync.</div>`;
+        top5Box.outerHTML = `<div class="lt-note" id="cryptoTop5Box">Todavía no hay ranking de cripto.</div>`;
+        return;
+      }
+
+      const best = rows[0];
+      const bars = [
+        { name: 'Momentum', val: best.momentum },
+        { name: 'Técnico', val: best.tecnico },
+      ].filter(b => b.val != null);
+
+      heroBox.outerHTML = `
+        <div class="hero hero-purple" id="cryptoHeroBox">
+          <div class="hero-label">RECOMENDADO · CRIPTO</div>
+          <div class="hero-top">
+            <div>
+              <div class="hero-ticker">${best.assets.ticker.replace('-USD','')}</div>
+              <div class="hero-name">${best.assets.name}</div>
+            </div>
+            <div>
+              <div class="hero-score mono">${best.score_total}</div>
+              <div class="hero-score-lbl">SCORE / 100</div>
+            </div>
+          </div>
+          <div class="hero-bars">
+            ${bars.map(b => `
+              <div class="hero-bar-row">
+                <span class="hero-bar-name">${b.name}</span>
+                <div class="hero-bar-track"><div class="hero-bar-fill" style="width:${b.val}%; background:var(--purple);"></div></div>
+                <span class="hero-bar-val mono">${b.val}</span>
+              </div>`).join('')}
+          </div>
+          <div class="hero-grid">
+            ${priceCell('ENTRADA', best.entrada_sugerida)}
+            ${priceCell('OBJETIVO', best.objetivo_sugerido, 'var(--green)')}
+            ${priceCell('STOP LOSS', best.stop_loss, 'var(--coral)')}
+          </div>
+        </div>`;
+
+      top5Box.outerHTML = `<div id="cryptoTop5Box">` + rows.map((r, i) => `
+        <div class="lt-card">
+          <div class="lt-top">
+            <div>
+              <div class="lt-name">#${i + 1}</div>
+              <div class="lt-ticker">${r.assets.ticker.replace('-USD','')}</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="lt-score mono" style="color:var(--purple);">${r.score_total}</div>
+              <div class="lt-name">SCORE</div>
+            </div>
+          </div>
+          <div class="hero-grid">
+            ${priceCell('ENTRADA', r.entrada_sugerida)}
+            ${priceCell('OBJETIVO', r.objetivo_sugerido, 'var(--green)')}
+            ${priceCell('STOP LOSS', r.stop_loss, 'var(--coral)')}
+          </div>
+        </div>`).join('') + `<div class="lt-note">Score de cripto es más nuevo que el de acciones — el RSI mejora a medida que se acumulan días.</div></div>`;
+    } catch {
+      heroBox.outerHTML = `<div class="hero-pending" id="cryptoHeroBox">Todavía no hay score de cripto.</div>`;
+      top5Box.outerHTML = `<div class="lt-note" id="cryptoTop5Box">Todavía no hay ranking de cripto.</div>`;
+    }
+  }
+
   load();
   loadCrypto();
+  loadCryptoScores();
 </script>
 </body>
 </html>
