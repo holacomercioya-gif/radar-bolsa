@@ -3,6 +3,15 @@
     {
       "path": "/api/sync-market-data",
       "schedule": "0 21 * * 1-5"
+    },
+    {
+      "path": "/api/enrich-scores",
+      "schedule": "10 21 * * 1-5"
     }
-  ]
+  ],
+  "functions": {
+    "api/enrich-scores.js": {
+      "maxDuration": 60
+    }
+  }
 }
