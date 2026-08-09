@@ -15,14 +15,19 @@
     {
       "path": "/api/close-recommendations",
       "schedule": "25 21 * * 1-5"
+    },
+    {
+      "path": "/api/sync-crypto-data",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/enrich-crypto",
+      "schedule": "30 21 * * *"
     }
   ],
   "functions": {
-    "api/enrich-scores.js": {
-      "maxDuration": 60
-    },
-    "api/enrich-longterm.js": {
-      "maxDuration": 60
-    }
+    "api/enrich-scores.js": { "maxDuration": 60 },
+    "api/enrich-longterm.js": { "maxDuration": 60 },
+    "api/enrich-crypto.js": { "maxDuration": 30 }
   }
 }
