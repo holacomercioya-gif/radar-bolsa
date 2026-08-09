@@ -329,7 +329,7 @@
     const heroBox = document.getElementById('heroBox');
     try {
       const [best] = await sb(
-        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=1&select=asset_id,score_total,momentum,tecnico,noticias,entrada_sugerida,objetivo_sugerido,stop_loss,risk_reward,assets(ticker,market,asset_type)`
+        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=1&select=asset_id,score_total,momentum,tecnico,noticias,fuerza_relativa,entrada_sugerida,objetivo_sugerido,stop_loss,risk_reward,assets(ticker,market,asset_type)`
       );
       if (!best) {
         heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy. El análisis se activa un rato después del cierre del mercado — volvé a entrar más tarde.</div>`;
@@ -343,6 +343,7 @@
         { name: 'Momentum', val: best.momentum },
         { name: 'Técnico', val: best.tecnico },
         { name: 'Noticias', val: best.noticias },
+        { name: 'Fuerza rel.', val: best.fuerza_relativa },
       ].filter(b => b.val != null);
 
       const why = generateWhy(bars);
