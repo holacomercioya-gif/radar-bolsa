@@ -143,13 +143,13 @@
     <b style="color:var(--text);">¿Qué es el SCORE?</b> Un número de 0 a 100 que resume qué tan buena es la oportunidad según varios factores combinados (momentum, técnico, noticias en corto plazo; calidad, crecimiento, valoración en mediano/largo plazo). Cuanto más alto, mejor posicionado está ese activo según esos factores — nunca es una garantía de resultado.
   </div>
 
-  <div class="sec-label">Recomendado del día · Corto plazo</div>
+  <div class="sec-label">Oportunidad detectada · Corto plazo</div>
   <div id="heroBox" class="loading">Buscando la mejor oportunidad…</div>
 
   <div class="sec-label">Top 5 · Corto plazo</div>
   <div id="shortTop5Box" class="loading">Cargando ranking…</div>
 
-  <div class="sec-label">Recomendado · Mediano / largo plazo</div>
+  <div class="sec-label">Oportunidad detectada · Mediano / largo plazo</div>
   <div id="longHeroBox" class="loading">Buscando la mejor oportunidad…</div>
 
   <div class="sec-label">Top 5 · Mediano / largo plazo</div>
@@ -178,7 +178,7 @@
   <div class="sec-label">Criptomonedas · Top movimientos 24h</div>
   <div id="cryptoList" class="loading">Cargando criptomonedas…</div>
 
-  <div class="sec-label">Recomendado · Cripto</div>
+  <div class="sec-label">Oportunidad detectada · Cripto</div>
   <div id="cryptoHeroBox" class="loading">Buscando la mejor oportunidad…</div>
 
   <div class="sec-label">Top 5 · Cripto</div>
@@ -193,6 +193,8 @@
 <script>
   const SUPABASE_URL = 'https://eamqqrsbaqzwtwibgvou.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_ggCGXnyS_-pYYOOGG40Kug_38mrUoG2';
+
+  const MIN_CONVICTION_SCORE = 60;
 
   let cclRate = null;
 
@@ -209,6 +211,50 @@
   function fmtARS(usdValue) {
     if (usdValue == null || cclRate == null) return null;
     return Math.round(usdValue * cclRate).toLocaleString('es-AR');
+  }
+
+  // Genera una explicación corta basada EXCLUSIVAMENTE en los componentes
+  // reales del score — nunca texto genérico ni inventado.
+  function generateWhy(components) {
+    const valid = components.filter(c => c.val != null);
+    if (valid.length === 0) return '';
+    const sorted = [...valid].sort((a, b) => b.val - a.val);
+    const strong = sorted.filter(c => c.val >= 70).slice(0, 2);
+    const weak = sorted[sorted.length - 1];
+
+    let text = '';
+    if (strong.length > 0) {
+      text += `Destaca por ${strong.map(c => `${c.name} (${c.val})`).join(' y ')}.`;
+    } else {
+      text += `Ningún componente individual es sobresaliente todavía.`;
+    }
+    if (weak && weak.val < 55 && !strong.includes(weak)) {
+      text += ` Su punto más débil es ${weak.name} (${weak.val}).`;
+    }
+    return text;
+  }
+
+  async function fetchScoreAlert(assetId, radarMode, todayScore, today) {
+    try {
+      const [prev] = await sb(
+        `scores?asset_id=eq.${assetId}&radar_mode=eq.${radarMode}&date=lt.${today}&order=date.desc&limit=1&select=score_total`
+      );
+      if (!prev) return null;
+      const diff = todayScore - prev.score_total;
+      if (Math.abs(diff) < 15) return null;
+      return { previous: prev.score_total, diff };
+    } catch {
+      return null;
+    }
+  }
+
+  function alertBanner(ticker, alert) {
+    if (!alert) return '';
+    const arrow = alert.diff > 0 ? '↑' : '↓';
+    const color = alert.diff > 0 ? 'var(--green)' : 'var(--coral)';
+    return `<div style="margin-bottom:10px; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,.03); font-size:11px; color:${color}; font-family:'JetBrains Mono';">
+      ${arrow} Score cambió de ${alert.previous} a ${alert.previous + alert.diff} desde la última vez.
+    </div>`;
   }
 
   function priceCell(label, usdValue, colorVar) {
@@ -283,10 +329,14 @@
     const heroBox = document.getElementById('heroBox');
     try {
       const [best] = await sb(
-        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=1&select=score_total,momentum,tecnico,noticias,entrada_sugerida,objetivo_sugerido,stop_loss,risk_reward,assets(ticker,market,asset_type)`
+        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=1&select=asset_id,score_total,momentum,tecnico,noticias,entrada_sugerida,objetivo_sugerido,stop_loss,risk_reward,assets(ticker,market,asset_type)`
       );
       if (!best) {
         heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy. El análisis se activa un rato después del cierre del mercado — volvé a entrar más tarde.</div>`;
+        return;
+      }
+      if (best.score_total < MIN_CONVICTION_SCORE) {
+        heroBox.outerHTML = `<div class="hero-pending" id="heroBox">⚠️ Sin oportunidades de alta convicción hoy en corto plazo. El mejor score encontrado (${best.assets.ticker}: ${best.score_total}) está por debajo del mínimo (${MIN_CONVICTION_SCORE}) para mostrarlo como recomendación fuerte.</div>`;
         return;
       }
       const bars = [
@@ -295,9 +345,13 @@
         { name: 'Noticias', val: best.noticias },
       ].filter(b => b.val != null);
 
+      const why = generateWhy(bars);
+      const alert = await fetchScoreAlert(best.asset_id, 'moderado_corto', best.score_total, today);
+
       heroBox.outerHTML = `
         <div class="hero" id="heroBox">
-          <div class="hero-label">RECOMENDADO HOY · ${best.assets.market}</div>
+          <div class="hero-label">OPORTUNIDAD DETECTADA · ${best.assets.market}</div>
+          ${alertBanner(best.assets.ticker, alert)}
           <div class="hero-top">
             <div>
               <div class="hero-ticker">${best.assets.ticker}</div>
@@ -321,6 +375,7 @@
             ${priceCell('OBJETIVO', best.objetivo_sugerido, 'var(--green)')}
             ${priceCell('STOP LOSS', best.stop_loss, 'var(--coral)')}
           </div>
+          ${why ? `<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-size:11.5px; color:var(--text); line-height:1.5;"><b style="color:var(--muted);">¿Por qué?</b> ${why}</div>` : ''}
         </div>`;
     } catch {
       heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy.</div>`;
@@ -330,11 +385,12 @@
   async function loadShortTop5(today) {
     const box = document.getElementById('shortTop5Box');
     try {
-      const rows = await sb(
-        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=5&select=score_total,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,market,asset_type)`
+      const allRows = await sb(
+        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=15&select=score_total,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,market,asset_type)`
       );
+      const rows = (allRows || []).filter(r => r.score_total >= MIN_CONVICTION_SCORE).slice(0, 5);
       if (!rows || rows.length === 0) {
-        box.outerHTML = `<div class="lt-note" id="shortTop5Box">Todavía no hay ranking de corto plazo para hoy.</div>`;
+        box.outerHTML = `<div class="lt-note" id="shortTop5Box">⚠️ Ninguna oportunidad de corto plazo superó el mínimo de convicción (${MIN_CONVICTION_SCORE}) hoy. Preferimos no mostrarte relleno de baja calidad.</div>`;
         return;
       }
       box.outerHTML = `<div id="shortTop5Box">` + rows.map((r, i) => `
@@ -370,6 +426,10 @@
         box.outerHTML = `<div class="hero-pending" id="longHeroBox">Todavía no hay empresas analizadas para mediano/largo plazo.</div>`;
         return;
       }
+      if (best.score_total < MIN_CONVICTION_SCORE) {
+        box.outerHTML = `<div class="hero-pending" id="longHeroBox">⚠️ Sin oportunidades de alta convicción en mediano/largo plazo por ahora. Mejor score encontrado (${best.assets.ticker}: ${best.score_total}) por debajo del mínimo (${MIN_CONVICTION_SCORE}).</div>`;
+        return;
+      }
       const bars = [
         { name: 'Calidad', val: best.calidad_empresarial },
         { name: 'Crecimiento', val: best.crecimiento },
@@ -378,7 +438,7 @@
 
       box.outerHTML = `
         <div class="hero hero-blue" id="longHeroBox">
-          <div class="hero-label">RECOMENDADO · MEDIANO/LARGO PLAZO</div>
+          <div class="hero-label">OPORTUNIDAD DETECTADA · MEDIANO/LARGO PLAZO</div>
           <div class="hero-top">
             <div>
               <div class="hero-ticker">${best.assets.ticker}</div>
@@ -548,12 +608,18 @@
     const heroBox = document.getElementById('cryptoHeroBox');
     const top5Box = document.getElementById('cryptoTop5Box');
     try {
-      const rows = await sb(
-        `scores?radar_mode=eq.cripto_corto&order=date.desc,score_total.desc&limit=5&select=score_total,momentum,tecnico,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,name)`
+      const allRows = await sb(
+        `scores?radar_mode=eq.cripto_corto&order=date.desc,score_total.desc&limit=15&select=asset_id,score_total,momentum,tecnico,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,name)`
       );
-      if (!rows || rows.length === 0) {
+      if (!allRows || allRows.length === 0) {
         heroBox.outerHTML = `<div class="hero-pending" id="cryptoHeroBox">Todavía no hay score de cripto calculado — se activa después del próximo sync.</div>`;
         top5Box.outerHTML = `<div class="lt-note" id="cryptoTop5Box">Todavía no hay ranking de cripto.</div>`;
+        return;
+      }
+      const rows = allRows.filter(r => r.score_total >= MIN_CONVICTION_SCORE).slice(0, 5);
+      if (rows.length === 0) {
+        heroBox.outerHTML = `<div class="hero-pending" id="cryptoHeroBox">⚠️ Sin oportunidades de alta convicción en cripto por ahora. Mejor score encontrado (${allRows[0].assets.ticker.replace('-USD','')}: ${allRows[0].score_total}) por debajo del mínimo (${MIN_CONVICTION_SCORE}).</div>`;
+        top5Box.outerHTML = `<div class="lt-note" id="cryptoTop5Box">Ninguna criptomoneda superó el mínimo de convicción hoy.</div>`;
         return;
       }
 
@@ -563,9 +629,14 @@
         { name: 'Técnico', val: best.tecnico },
       ].filter(b => b.val != null);
 
+      const why = generateWhy(bars);
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+      const alert = await fetchScoreAlert(best.asset_id, 'cripto_corto', best.score_total, today);
+
       heroBox.outerHTML = `
         <div class="hero hero-purple" id="cryptoHeroBox">
-          <div class="hero-label">RECOMENDADO · CRIPTO</div>
+          <div class="hero-label">OPORTUNIDAD DETECTADA · CRIPTO</div>
+          ${alertBanner(best.assets.ticker, alert)}
           <div class="hero-top">
             <div>
               <div class="hero-ticker">${best.assets.ticker.replace('-USD','')}</div>
@@ -589,6 +660,7 @@
             ${priceCell('OBJETIVO', best.objetivo_sugerido, 'var(--green)')}
             ${priceCell('STOP LOSS', best.stop_loss, 'var(--coral)')}
           </div>
+          ${why ? `<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-size:11.5px; color:var(--text); line-height:1.5;"><b style="color:var(--muted);">¿Por qué?</b> ${why}</div>` : ''}
         </div>`;
 
       top5Box.outerHTML = `<div id="cryptoTop5Box">` + rows.map((r, i) => `
