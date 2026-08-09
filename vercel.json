@@ -11,6 +11,10 @@
     {
       "path": "/api/enrich-longterm",
       "schedule": "20 21 * * 1-5"
+    },
+    {
+      "path": "/api/close-recommendations",
+      "schedule": "25 21 * * 1-5"
     }
   ],
   "functions": {
