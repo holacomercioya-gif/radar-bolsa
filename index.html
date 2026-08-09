@@ -82,6 +82,22 @@
     font-size:12px; color:var(--muted); text-align:center; line-height:1.5;
   }
 
+  /* Mediano/largo plazo */
+  .lt-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:8px;
+  }
+  .lt-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .lt-ticker{font-family:'Space Grotesk'; font-weight:700; font-size:15px;}
+  .lt-name{font-size:10.5px; color:var(--muted);}
+  .lt-score{font-family:'JetBrains Mono'; font-weight:700; font-size:20px; color:var(--blue);}
+  .lt-bars{display:flex; flex-direction:column; gap:6px;}
+  .lt-bar-row{display:flex; align-items:center; gap:8px;}
+  .lt-bar-name{font-size:10px; color:var(--muted); width:76px; flex-shrink:0;}
+  .lt-bar-track{flex:1; height:5px; background:var(--surface-2); border-radius:4px; overflow:hidden;}
+  .lt-bar-fill{height:100%; border-radius:4px; background:var(--blue);}
+  .lt-bar-val{font-family:'JetBrains Mono'; font-size:10px; width:26px; text-align:right; color:var(--muted);}
+  .lt-note{font-size:11px; color:var(--muted); text-align:center; padding:10px 4px; line-height:1.5;}
+
   .disclaimer{
     background:var(--surface); border:1px dashed var(--line); border-radius:14px; padding:14px;
     font-size:11px; color:var(--muted); line-height:1.55; margin-top:24px;
@@ -109,6 +125,9 @@
 
   <div class="sec-label">Mejor oportunidad de hoy</div>
   <div id="heroBox" class="loading">Buscando la mejor oportunidad…</div>
+
+  <div class="sec-label">Mediano / largo plazo</div>
+  <div id="longTermBox" class="loading">Cargando análisis fundamental…</div>
 
   <div class="warmup" id="warmupBox" style="display:none;">
     <b>Radar en calentamiento.</b> <span id="warmupText"></span> El score completo (momentum, técnico, fundamental) se activa con más días de historial. Por ahora, este ranking se basa solo en la variación del día y el volumen.
@@ -242,6 +261,46 @@
     }
   }
 
+  async function loadLongTerm() {
+    const box = document.getElementById('longTermBox');
+    try {
+      const rows = await sb(
+        `scores?radar_mode=eq.moderado_largo&order=score_total.desc&limit=5&select=score_total,calidad_empresarial,crecimiento,valoracion,entrada_sugerida,assets(ticker,name)`
+      );
+      if (!rows || rows.length === 0) {
+        box.outerHTML = `<div class="lt-note" id="longTermBox">Todavía no hay empresas analizadas para mediano/largo plazo — el radar va rotando la lista de referencia unas 4 por día.</div>`;
+        return;
+      }
+      box.outerHTML = `<div id="longTermBox">` + rows.map(r => {
+        const bars = [
+          { name: 'Calidad', val: r.calidad_empresarial },
+          { name: 'Crecimiento', val: r.crecimiento },
+          { name: 'Valoración', val: r.valoracion },
+        ].filter(b => b.val != null);
+        return `
+          <div class="lt-card">
+            <div class="lt-top">
+              <div>
+                <div class="lt-ticker">${r.assets.ticker}</div>
+                <div class="lt-name">${r.assets.name}</div>
+              </div>
+              <div class="lt-score mono">${r.score_total}</div>
+            </div>
+            <div class="lt-bars">
+              ${bars.map(b => `
+                <div class="lt-bar-row">
+                  <span class="lt-bar-name">${b.name}</span>
+                  <div class="lt-bar-track"><div class="lt-bar-fill" style="width:${b.val}%"></div></div>
+                  <span class="lt-bar-val mono">${b.val}</span>
+                </div>`).join('')}
+            </div>
+          </div>`;
+      }).join('') + `<div class="lt-note">Análisis fundamental (no de precio del día). La lista completa se cubre en rotación de a 4 empresas por día.</div></div>`;
+    } catch {
+      box.outerHTML = `<div class="lt-note" id="longTermBox">Todavía no hay datos de mediano/largo plazo.</div>`;
+    }
+  }
+
   async function load() {
     try {
       const [latest] = await sb('daily_prices?select=date&order=date.desc&limit=1');
@@ -251,6 +310,7 @@
       const today = latest.date;
       document.getElementById('dateSub').textContent = today;
       loadHero(today);
+      loadLongTerm();
 
       const daysAccumulated = Math.round((new Date(latest.date) - new Date(first.date)) / 86400000) + 1;
       if (daysAccumulated < 20) {
