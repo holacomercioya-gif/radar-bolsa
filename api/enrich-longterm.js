@@ -158,6 +158,18 @@ module.exports = async function handler(req, res) {
   }
 
   if (scoreRows.length > 0) {
+    const journalRows = scoreRows.map((s) => ({
+      asset_id: s.asset_id,
+      date_recommended: today,
+      radar_mode: s.radar_mode,
+      score_al_momento: s.score_total,
+      entrada: s.entrada_sugerida,
+      stop_loss: s.stop_loss,
+      objetivo: s.objetivo_sugerido,
+      cerrado: false,
+    }));
+    await supabaseRequest('recommendation_journal', { method: 'POST', body: journalRows });
+
     await supabaseRequest('scores?on_conflict=asset_id,date,radar_mode', {
       method: 'POST',
       body: scoreRows,
