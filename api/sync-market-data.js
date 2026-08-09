@@ -9,7 +9,7 @@
 //   https://tu-dominio.vercel.app/api/sync-market-data?secret=TU_SECRETO
 //
 // Variables de entorno necesarias en Vercel (Project Settings > Environment Variables):
-//   SUPABASE_URL               -> https://eamqqrsbaqzwtwibgvo.supabase.co
+//   SUPABASE_URL               -> https://eamqqrsbaqzwtwibgvou.supabase.co
 //   SUPABASE_SERVICE_ROLE_KEY  -> la Secret key (sb_secret_...) de Supabase
 //   CRON_SECRET                -> una clave random inventada por vos, para que nadie más pueda disparar el sync
 
@@ -79,50 +79,4 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const today = getTodayAR();
-  const results = await Promise.all(SOURCES.map(fetchSource));
-  const rows = results.flat();
-
-  if (rows.length === 0) {
-    res.status(200).json({ ok: true, message: 'No se recibieron datos de ninguna fuente', total: 0 });
-    return;
-  }
-
-  const assetsPayload = rows.map((r) => ({
-    ticker: r.ticker,
-    name: r.ticker,
-    market: r.market,
-    asset_type: r.asset_type,
-  }));
-
-  const upsertedAssets = await supabaseRequest('assets?on_conflict=ticker', {
-    method: 'POST',
-    body: assetsPayload,
-    prefer: 'resolution=merge-duplicates,return=representation',
-  });
-
-  const tickerToId = new Map(upsertedAssets.map((a) => [a.ticker, a.id]));
-
-  const pricesPayload = rows
-    .filter((r) => tickerToId.has(r.ticker))
-    .map((r) => ({
-      asset_id: tickerToId.get(r.ticker),
-      date: today,
-      close: r.close,
-      volume: r.volume,
-      pct_change: r.pct_change,
-    }));
-
-  await supabaseRequest('daily_prices?on_conflict=asset_id,date', {
-    method: 'POST',
-    body: pricesPayload,
-    prefer: 'resolution=merge-duplicates',
-  });
-
-  res.status(200).json({
-    ok: true,
-    date: today,
-    activos_procesados: assetsPayload.length,
-    precios_guardados: pricesPayload.length,
-  });
-};
+  const today = getTodayAR
