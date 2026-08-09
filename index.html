@@ -77,6 +77,10 @@
   .hero-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; padding-top:12px; border-top:1px solid var(--line);}
   .hero-grid .l{font-size:9.5px; color:var(--muted-2); font-family:'JetBrains Mono'; margin-bottom:2px;}
   .hero-grid .v{font-family:'JetBrains Mono'; font-size:12.5px; font-weight:600;}
+  .hero-blue{border-color:rgba(91,140,255,.4); background:linear-gradient(160deg, rgba(91,140,255,.08), var(--surface) 55%);}
+  .hero-blue .hero-label{color:var(--blue);}
+  .hero-blue .hero-score{color:var(--blue);}
+
   .hero-pending{
     background:var(--surface); border:1px dashed var(--line); border-radius:16px; padding:16px; margin-bottom:8px;
     font-size:12px; color:var(--muted); text-align:center; line-height:1.5;
@@ -97,6 +101,14 @@
   .lt-bar-fill{height:100%; border-radius:4px; background:var(--blue);}
   .lt-bar-val{font-family:'JetBrains Mono'; font-size:10px; width:26px; text-align:right; color:var(--muted);}
   .lt-note{font-size:11px; color:var(--muted); text-align:center; padding:10px 4px; line-height:1.5;}
+
+  .track-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:8px;
+  }
+  .track-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .track-item .v{font-family:'JetBrains Mono'; font-weight:700; font-size:18px;}
+  .track-item .v.pos{color:var(--green);} .track-item .v.neg{color:var(--coral);}
+  .track-item .l{font-size:10px; color:var(--muted); margin-top:2px;}
 
   .disclaimer{
     background:var(--surface); border:1px dashed var(--line); border-radius:14px; padding:14px;
@@ -123,11 +135,20 @@
     <div class="sub" id="dateSub">cargando…</div>
   </header>
 
-  <div class="sec-label">Mejor oportunidad de hoy</div>
+  <div class="sec-label">Recomendado del día · Corto plazo</div>
   <div id="heroBox" class="loading">Buscando la mejor oportunidad…</div>
 
-  <div class="sec-label">Mediano / largo plazo</div>
+  <div class="sec-label">Top 5 · Corto plazo</div>
+  <div id="shortTop5Box" class="loading">Cargando ranking…</div>
+
+  <div class="sec-label">Recomendado · Mediano / largo plazo</div>
+  <div id="longHeroBox" class="loading">Buscando la mejor oportunidad…</div>
+
+  <div class="sec-label">Top 5 · Mediano / largo plazo</div>
   <div id="longTermBox" class="loading">Cargando análisis fundamental…</div>
+
+  <div class="sec-label">Track record real</div>
+  <div id="trackBox" class="loading">Cargando historial de aciertos…</div>
 
   <div class="warmup" id="warmupBox" style="display:none;">
     <b>Radar en calentamiento.</b> <span id="warmupText"></span> El score completo (momentum, técnico, fundamental) se activa con más días de historial. Por ahora, este ranking se basa solo en la variación del día y el volumen.
@@ -217,7 +238,7 @@
     const heroBox = document.getElementById('heroBox');
     try {
       const [best] = await sb(
-        `scores?date=eq.${today}&order=score_total.desc&limit=1&select=score_total,momentum,tecnico,noticias,entrada_sugerida,objetivo_sugerido,stop_loss,risk_reward,assets(ticker,market,asset_type)`
+        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=1&select=score_total,momentum,tecnico,noticias,entrada_sugerida,objetivo_sugerido,stop_loss,risk_reward,assets(ticker,market,asset_type)`
       );
       if (!best) {
         heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy. El análisis se activa un rato después del cierre del mercado — volvé a entrar más tarde.</div>`;
@@ -231,7 +252,7 @@
 
       heroBox.outerHTML = `
         <div class="hero" id="heroBox">
-          <div class="hero-label">TOP DEL DÍA · ${best.assets.market}</div>
+          <div class="hero-label">RECOMENDADO HOY · ${best.assets.market}</div>
           <div class="hero-top">
             <div>
               <div class="hero-ticker">${best.assets.ticker}</div>
@@ -258,6 +279,82 @@
         </div>`;
     } catch {
       heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy.</div>`;
+    }
+  }
+
+  async function loadShortTop5(today) {
+    const box = document.getElementById('shortTop5Box');
+    try {
+      const rows = await sb(
+        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=5&select=score_total,entrada_sugerida,assets(ticker,market,asset_type)`
+      );
+      if (!rows || rows.length === 0) {
+        box.outerHTML = `<div class="lt-note" id="shortTop5Box">Todavía no hay ranking de corto plazo para hoy.</div>`;
+        return;
+      }
+      box.outerHTML = `<div id="shortTop5Box">` + rows.map((r, i) => `
+        <div class="lt-card">
+          <div class="lt-top" style="margin-bottom:0;">
+            <div>
+              <div class="lt-name">#${i + 1}</div>
+              <div class="lt-ticker">${r.assets.ticker}</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="lt-score mono" style="color:var(--gold);">${r.score_total}</div>
+              <div class="lt-name">$${fmtScorePrice(r.entrada_sugerida)}</div>
+            </div>
+          </div>
+        </div>`).join('') + `</div>`;
+    } catch {
+      box.outerHTML = `<div class="lt-note" id="shortTop5Box">Todavía no hay ranking de corto plazo.</div>`;
+    }
+  }
+
+  async function loadLongHero() {
+    const box = document.getElementById('longHeroBox');
+    try {
+      const [best] = await sb(
+        `scores?radar_mode=eq.moderado_largo&order=score_total.desc&limit=1&select=score_total,calidad_empresarial,crecimiento,valoracion,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,name)`
+      );
+      if (!best) {
+        box.outerHTML = `<div class="hero-pending" id="longHeroBox">Todavía no hay empresas analizadas para mediano/largo plazo.</div>`;
+        return;
+      }
+      const bars = [
+        { name: 'Calidad', val: best.calidad_empresarial },
+        { name: 'Crecimiento', val: best.crecimiento },
+        { name: 'Valoración', val: best.valoracion },
+      ].filter(b => b.val != null);
+
+      box.outerHTML = `
+        <div class="hero hero-blue" id="longHeroBox">
+          <div class="hero-label">RECOMENDADO · MEDIANO/LARGO PLAZO</div>
+          <div class="hero-top">
+            <div>
+              <div class="hero-ticker">${best.assets.ticker}</div>
+              <div class="hero-name">${best.assets.name}</div>
+            </div>
+            <div>
+              <div class="hero-score mono">${best.score_total}</div>
+              <div class="hero-score-lbl">SCORE / 100</div>
+            </div>
+          </div>
+          <div class="hero-bars">
+            ${bars.map(b => `
+              <div class="hero-bar-row">
+                <span class="hero-bar-name">${b.name}</span>
+                <div class="hero-bar-track"><div class="hero-bar-fill" style="width:${b.val}%; background:var(--blue);"></div></div>
+                <span class="hero-bar-val mono">${b.val}</span>
+              </div>`).join('')}
+          </div>
+          <div class="hero-grid">
+            <div><div class="l">ENTRADA</div><div class="v mono">$${fmtScorePrice(best.entrada_sugerida)}</div></div>
+            <div><div class="l">OBJETIVO</div><div class="v mono" style="color:var(--green)">$${fmtScorePrice(best.objetivo_sugerido)}</div></div>
+            <div><div class="l">STOP LOSS</div><div class="v mono" style="color:var(--coral)">$${fmtScorePrice(best.stop_loss)}</div></div>
+          </div>
+        </div>`;
+    } catch {
+      box.outerHTML = `<div class="hero-pending" id="longHeroBox">Todavía no hay datos de mediano/largo plazo.</div>`;
     }
   }
 
@@ -301,6 +398,30 @@
     }
   }
 
+  async function loadTrackRecord() {
+    const box = document.getElementById('trackBox');
+    try {
+      const rows = await sb('recommendation_journal?cerrado=eq.true&select=resultado_pct');
+      if (!rows || rows.length === 0) {
+        box.outerHTML = `<div class="lt-note" id="trackBox">Todavía no hay recomendaciones cerradas — las de corto plazo se evalúan a los 5 días hábiles, las de mediano/largo a los 30. Volvé más adelante para ver el % de acierto real.</div>`;
+        return;
+      }
+      const positivas = rows.filter(r => r.resultado_pct > 0).length;
+      const winRate = Math.round((positivas / rows.length) * 100);
+      const avgReturn = Math.round((rows.reduce((s, r) => s + r.resultado_pct, 0) / rows.length) * 100) / 100;
+      box.outerHTML = `
+        <div class="track-card" id="trackBox">
+          <div class="track-grid">
+            <div class="track-item"><div class="v ${winRate >= 50 ? 'pos' : 'neg'}">${winRate}%</div><div class="l">Recomendaciones positivas</div></div>
+            <div class="track-item"><div class="v ${avgReturn >= 0 ? 'pos' : 'neg'}">${avgReturn >= 0 ? '+' : ''}${avgReturn}%</div><div class="l">Retorno promedio</div></div>
+            <div class="track-item"><div class="v">${rows.length}</div><div class="l">Recomendaciones cerradas</div></div>
+          </div>
+        </div>`;
+    } catch {
+      box.outerHTML = `<div class="lt-note" id="trackBox">Todavía no hay historial disponible.</div>`;
+    }
+  }
+
   async function load() {
     try {
       const [latest] = await sb('daily_prices?select=date&order=date.desc&limit=1');
@@ -310,7 +431,10 @@
       const today = latest.date;
       document.getElementById('dateSub').textContent = today;
       loadHero(today);
+      loadShortTop5(today);
+      loadLongHero();
       loadLongTerm();
+      loadTrackRecord();
 
       const daysAccumulated = Math.round((new Date(latest.date) - new Date(first.date)) / 86400000) + 1;
       if (daysAccumulated < 20) {
