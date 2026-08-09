@@ -62,11 +62,11 @@ async function supabaseRequest(path, { method = 'GET', body, prefer } = {}) {
   if (prefer) headers.prefer = prefer;
 
   const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const text = await res.text();
   if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Supabase ${method} ${path} -> ${res.status}: ${errText}`);
+    throw new Error(`Supabase ${method} ${path} -> ${res.status}: ${text}`);
   }
-  return res.status === 204 ? null : res.json();
+  return text ? JSON.parse(text) : null;
 }
 
 module.exports = async function handler(req, res) {
