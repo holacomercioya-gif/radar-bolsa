@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radar Bolsa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E14; --surface:#11161F; --surface-2:#161C27; --line:#232B38;
+    --text:#E8ECF1; --muted:#7A8494; --muted-2:#525C6B;
+    --green:#3ED9A0; --coral:#FF6B4A; --gold:#F0B429; --blue:#5B8CFF;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; padding-bottom:60px;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .wrap{max-width:480px; margin:0 auto; padding:0 16px;}
+
+  header{padding:22px 0 16px;}
+  .top-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+  .brand{display:flex; align-items:center; gap:9px;}
+  .brand svg{width:22px; height:22px; color:var(--green);}
+  .brand span{font-family:'Space Grotesk'; font-weight:700; font-size:15.5px;}
+  .status{display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); font-family:'JetBrains Mono';}
+  .status i{width:6px; height:6px; border-radius:50%; background:var(--green); display:block;}
+  h1{font-family:'Space Grotesk'; font-size:22px; font-weight:700; margin-bottom:4px;}
+  .sub{font-size:12.5px; color:var(--muted); font-family:'JetBrains Mono';}
+
+  .warmup{
+    background:linear-gradient(135deg, rgba(240,180,41,.09), rgba(240,180,41,.02));
+    border:1px solid rgba(240,180,41,.35); border-radius:12px; padding:13px 14px; margin:18px 0;
+    font-size:12px; color:var(--text); line-height:1.5;
+  }
+  .warmup b{color:var(--gold);}
+
+  .tabs{display:flex; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:4px; margin:16px 0;}
+  .tabs button{flex:1; border:none; background:transparent; color:var(--muted); font-size:12px; font-family:'Space Grotesk'; font-weight:600; padding:9px 4px; border-radius:9px; cursor:pointer;}
+  .tabs button.active{background:var(--green); color:var(--bg);}
+
+  .sec-label{display:flex; align-items:center; gap:8px; margin:22px 0 12px; font-family:'JetBrains Mono'; font-size:11px; color:var(--muted-2); text-transform:uppercase; letter-spacing:1.2px;}
+  .sec-label::after{content:''; flex:1; height:1px; background:var(--line);}
+
+  .row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:13px 14px; margin-bottom:8px;
+  }
+  .row .left{display:flex; flex-direction:column; gap:2px;}
+  .row .ticker{font-family:'Space Grotesk'; font-weight:700; font-size:14.5px;}
+  .row .meta{font-size:10.5px; color:var(--muted); font-family:'JetBrains Mono';}
+  .row .right{text-align:right;}
+  .row .price{font-family:'JetBrains Mono'; font-size:13px; color:var(--text);}
+  .row .pct{font-family:'JetBrains Mono'; font-weight:700; font-size:13.5px;}
+  .pct.pos{color:var(--green);} .pct.neg{color:var(--coral);}
+
+  .empty{color:var(--muted); font-size:12.5px; text-align:center; padding:30px 0;}
+  .loading{color:var(--muted); font-size:12.5px; text-align:center; padding:30px 0; font-family:'JetBrains Mono';}
+
+  /* Hero: mejor oportunidad del día */
+  .hero{
+    background:linear-gradient(160deg, rgba(240,180,41,.08), var(--surface) 55%);
+    border:1px solid rgba(240,180,41,.4); border-radius:16px; padding:18px; margin-bottom:8px;
+  }
+  .hero-label{font-family:'JetBrains Mono'; font-size:10.5px; color:var(--gold); letter-spacing:1px; margin-bottom:10px;}
+  .hero-top{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;}
+  .hero-ticker{font-family:'Space Grotesk'; font-weight:700; font-size:22px;}
+  .hero-name{font-size:11.5px; color:var(--muted);}
+  .hero-score{font-family:'JetBrains Mono'; font-weight:700; font-size:30px; color:var(--gold); text-align:right; line-height:1;}
+  .hero-score-lbl{font-size:9.5px; color:var(--muted-2); font-family:'JetBrains Mono'; text-align:right;}
+  .hero-bars{display:flex; flex-direction:column; gap:7px; margin-bottom:14px;}
+  .hero-bar-row{display:flex; align-items:center; gap:8px;}
+  .hero-bar-name{font-size:10.5px; color:var(--muted); width:64px; flex-shrink:0;}
+  .hero-bar-track{flex:1; height:5px; background:var(--surface-2); border-radius:4px; overflow:hidden;}
+  .hero-bar-fill{height:100%; border-radius:4px; background:var(--green);}
+  .hero-bar-val{font-family:'JetBrains Mono'; font-size:10.5px; width:28px; text-align:right; color:var(--muted);}
+  .hero-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; padding-top:12px; border-top:1px solid var(--line);}
+  .hero-grid .l{font-size:9.5px; color:var(--muted-2); font-family:'JetBrains Mono'; margin-bottom:2px;}
+  .hero-grid .v{font-family:'JetBrains Mono'; font-size:12.5px; font-weight:600;}
+  .hero-pending{
+    background:var(--surface); border:1px dashed var(--line); border-radius:16px; padding:16px; margin-bottom:8px;
+    font-size:12px; color:var(--muted); text-align:center; line-height:1.5;
+  }
+
+  .disclaimer{
+    background:var(--surface); border:1px dashed var(--line); border-radius:14px; padding:14px;
+    font-size:11px; color:var(--muted); line-height:1.55; margin-top:24px;
+  }
+  .disclaimer b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top-row">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"></circle>
+          <circle cx="12" cy="12" r="4.5"></circle>
+          <path d="M12 12 L18 7"></path>
+        </svg>
+        <span>RADAR<span style="color:var(--muted)">BOLSA</span></span>
+      </div>
+      <div class="status"><i></i>EN VIVO</div>
+    </div>
+    <h1>Radar de hoy</h1>
+    <div class="sub" id="dateSub">cargando…</div>
+  </header>
+
+  <div class="sec-label">Mejor oportunidad de hoy</div>
+  <div id="heroBox" class="loading">Buscando la mejor oportunidad…</div>
+
+  <div class="warmup" id="warmupBox" style="display:none;">
+    <b>Radar en calentamiento.</b> <span id="warmupText"></span> El score completo (momentum, técnico, fundamental) se activa con más días de historial. Por ahora, este ranking se basa solo en la variación del día y el volumen.
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="active" data-market="all">TODOS</button>
+    <button data-market="BYMA">ARGENTINA</button>
+    <button data-market="USA">EE.UU.</button>
+  </div>
+
+  <div class="sec-label">Mayores subas del día</div>
+  <div id="gainersList" class="loading">Cargando datos…</div>
+
+  <div class="sec-label">Mayores bajas del día</div>
+  <div id="losersList" class="loading">Cargando datos…</div>
+
+  <div class="disclaimer">
+    <b>El sistema detecta variaciones del día según los parámetros configurados. No garantiza resultados ni constituye asesoramiento financiero.</b><br><br>
+    Toda decisión de inversión es tuya. Radar Bolsa no ejecuta operaciones.
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://eamqqrsbaqzwtwibgvou.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_ggCGXnyS_-pYYOOGG40Kug_38mrUoG2';
+
+  async function sb(path) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) throw new Error(`Supabase ${path} -> ${res.status}`);
+    return res.json();
+  }
+
+  let allRows = [];
+  let currentMarket = 'all';
+
+  function fmtPrice(n) {
+    if (n == null) return '-';
+    return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function renderList(el, rows) {
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="empty">Sin datos para este filtro todavía.</div>';
+      return;
+    }
+    el.innerHTML = rows.map(r => `
+      <div class="row">
+        <div class="left">
+          <span class="ticker">${r.ticker}</span>
+          <span class="meta">${r.asset_type.toUpperCase()} · ${r.market}</span>
+        </div>
+        <div class="right">
+          <div class="price mono">$${fmtPrice(r.close)}</div>
+          <div class="pct mono ${r.pct_change >= 0 ? 'pos' : 'neg'}">${r.pct_change >= 0 ? '+' : ''}${(r.pct_change ?? 0).toFixed(2)}%</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderAll() {
+    const filtered = currentMarket === 'all' ? allRows : allRows.filter(r => r.market === currentMarket);
+    const withChange = filtered.filter(r => r.pct_change != null);
+    const gainers = [...withChange].sort((a, b) => b.pct_change - a.pct_change).slice(0, 8);
+    const losers = [...withChange].sort((a, b) => a.pct_change - b.pct_change).slice(0, 8);
+    renderList(document.getElementById('gainersList'), gainers);
+    renderList(document.getElementById('losersList'), losers);
+  }
+
+  document.getElementById('tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMarket = btn.dataset.market;
+    renderAll();
+  });
+
+  function fmtScorePrice(n) {
+    if (n == null) return '-';
+    return Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  async function loadHero(today) {
+    const heroBox = document.getElementById('heroBox');
+    try {
+      const [best] = await sb(
+        `scores?date=eq.${today}&order=score_total.desc&limit=1&select=score_total,momentum,tecnico,noticias,entrada_sugerida,objetivo_sugerido,stop_loss,risk_reward,assets(ticker,market,asset_type)`
+      );
+      if (!best) {
+        heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy. El análisis se activa un rato después del cierre del mercado — volvé a entrar más tarde.</div>`;
+        return;
+      }
+      const bars = [
+        { name: 'Momentum', val: best.momentum },
+        { name: 'Técnico', val: best.tecnico },
+        { name: 'Noticias', val: best.noticias },
+      ].filter(b => b.val != null);
+
+      heroBox.outerHTML = `
+        <div class="hero" id="heroBox">
+          <div class="hero-label">TOP DEL DÍA · ${best.assets.market}</div>
+          <div class="hero-top">
+            <div>
+              <div class="hero-ticker">${best.assets.ticker}</div>
+              <div class="hero-name">${best.assets.asset_type.toUpperCase()}</div>
+            </div>
+            <div>
+              <div class="hero-score mono">${best.score_total}</div>
+              <div class="hero-score-lbl">SCORE / 100</div>
+            </div>
+          </div>
+          <div class="hero-bars">
+            ${bars.map(b => `
+              <div class="hero-bar-row">
+                <span class="hero-bar-name">${b.name}</span>
+                <div class="hero-bar-track"><div class="hero-bar-fill" style="width:${b.val}%"></div></div>
+                <span class="hero-bar-val mono">${b.val}</span>
+              </div>`).join('')}
+          </div>
+          <div class="hero-grid">
+            <div><div class="l">ENTRADA</div><div class="v mono">$${fmtScorePrice(best.entrada_sugerida)}</div></div>
+            <div><div class="l">OBJETIVO</div><div class="v mono" style="color:var(--green)">$${fmtScorePrice(best.objetivo_sugerido)}</div></div>
+            <div><div class="l">STOP LOSS</div><div class="v mono" style="color:var(--coral)">$${fmtScorePrice(best.stop_loss)}</div></div>
+          </div>
+        </div>`;
+    } catch {
+      heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy.</div>`;
+    }
+  }
+
+  async function load() {
+    try {
+      const [latest] = await sb('daily_prices?select=date&order=date.desc&limit=1');
+      const [first] = await sb('daily_prices?select=date&order=date.asc&limit=1');
+      if (!latest) throw new Error('sin datos');
+
+      const today = latest.date;
+      document.getElementById('dateSub').textContent = today;
+      loadHero(today);
+
+      const daysAccumulated = Math.round((new Date(latest.date) - new Date(first.date)) / 86400000) + 1;
+      if (daysAccumulated < 20) {
+        document.getElementById('warmupBox').style.display = 'block';
+        document.getElementById('warmupText').textContent =
+          `Llevás ${daysAccumulated} día${daysAccumulated === 1 ? '' : 's'} de historial acumulado (recomendado: 20+).`;
+      }
+
+      const rows = await sb(`daily_prices?date=eq.${today}&select=close,volume,pct_change,assets(ticker,market,asset_type)&limit=6000`);
+      allRows = rows
+        .filter(r => r.assets)
+        .map(r => ({
+          close: r.close, volume: r.volume, pct_change: r.pct_change,
+          ticker: r.assets.ticker, market: r.assets.market, asset_type: r.assets.asset_type
+        }));
+      renderAll();
+    } catch (err) {
+      document.getElementById('gainersList').innerHTML = `<div class="empty">Todavía no hay datos cargados. Esperá al próximo sync diario.</div>`;
+      document.getElementById('losersList').innerHTML = '';
+      document.getElementById('dateSub').textContent = 'sin datos';
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>
