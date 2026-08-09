@@ -135,6 +135,10 @@
     <div class="sub" id="dateSub">cargando…</div>
   </header>
 
+  <div class="lt-note" style="text-align:left; padding:12px 14px; background:var(--surface); border-radius:12px; border:1px solid var(--line); margin-bottom:4px;">
+    <b style="color:var(--text);">¿Qué es el SCORE?</b> Un número de 0 a 100 que resume qué tan buena es la oportunidad según varios factores combinados (momentum, técnico, noticias en corto plazo; calidad, crecimiento, valoración en mediano/largo plazo). Cuanto más alto, mejor posicionado está ese activo según esos factores — nunca es una garantía de resultado.
+  </div>
+
   <div class="sec-label">Recomendado del día · Corto plazo</div>
   <div id="heroBox" class="loading">Buscando la mejor oportunidad…</div>
 
@@ -161,10 +165,14 @@
   </div>
 
   <div class="sec-label">Mayores subas del día</div>
+  <div class="lt-note" style="padding:8px 4px;">Estas listas muestran precio y variación del día. El análisis profundo (score, entrada/objetivo/stop) todavía solo cubre EE.UU. — CEDEARs y acciones argentinas se van a sumar al motor de scoring más adelante.</div>
   <div id="gainersList" class="loading">Cargando datos…</div>
 
   <div class="sec-label">Mayores bajas del día</div>
   <div id="losersList" class="loading">Cargando datos…</div>
+
+  <div class="sec-label">Criptomonedas · Top movimientos 24h</div>
+  <div id="cryptoList" class="loading">Cargando criptomonedas…</div>
 
   <div class="disclaimer">
     <b>El sistema detecta variaciones del día según los parámetros configurados. No garantiza resultados ni constituye asesoramiento financiero.</b><br><br>
@@ -175,6 +183,33 @@
 <script>
   const SUPABASE_URL = 'https://eamqqrsbaqzwtwibgvou.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_ggCGXnyS_-pYYOOGG40Kug_38mrUoG2';
+
+  let cclRate = null;
+
+  async function fetchCCL() {
+    try {
+      const res = await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');
+      const data = await res.json();
+      cclRate = data.venta;
+    } catch {
+      cclRate = null;
+    }
+  }
+
+  function fmtARS(usdValue) {
+    if (usdValue == null || cclRate == null) return null;
+    return Math.round(usdValue * cclRate).toLocaleString('es-AR');
+  }
+
+  function priceCell(label, usdValue, colorVar) {
+    const ars = fmtARS(usdValue);
+    return `
+      <div>
+        <div class="l">${label}</div>
+        <div class="v mono"${colorVar ? ` style="color:${colorVar}"` : ''}>$${fmtScorePrice(usdValue)}</div>
+        ${ars ? `<div class="l" style="margin-top:2px;">≈ AR$${ars}</div>` : ''}
+      </div>`;
+  }
 
   async function sb(path) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -213,7 +248,7 @@
 
   function renderAll() {
     const filtered = currentMarket === 'all' ? allRows : allRows.filter(r => r.market === currentMarket);
-    const withChange = filtered.filter(r => r.pct_change != null);
+    const withChange = filtered.filter(r => r.pct_change != null && r.close >= 10 && Math.abs(r.pct_change) <= 50);
     const gainers = [...withChange].sort((a, b) => b.pct_change - a.pct_change).slice(0, 8);
     const losers = [...withChange].sort((a, b) => a.pct_change - b.pct_change).slice(0, 8);
     renderList(document.getElementById('gainersList'), gainers);
@@ -272,9 +307,9 @@
               </div>`).join('')}
           </div>
           <div class="hero-grid">
-            <div><div class="l">ENTRADA</div><div class="v mono">$${fmtScorePrice(best.entrada_sugerida)}</div></div>
-            <div><div class="l">OBJETIVO</div><div class="v mono" style="color:var(--green)">$${fmtScorePrice(best.objetivo_sugerido)}</div></div>
-            <div><div class="l">STOP LOSS</div><div class="v mono" style="color:var(--coral)">$${fmtScorePrice(best.stop_loss)}</div></div>
+            ${priceCell('ENTRADA', best.entrada_sugerida)}
+            ${priceCell('OBJETIVO', best.objetivo_sugerido, 'var(--green)')}
+            ${priceCell('STOP LOSS', best.stop_loss, 'var(--coral)')}
           </div>
         </div>`;
     } catch {
@@ -286,7 +321,7 @@
     const box = document.getElementById('shortTop5Box');
     try {
       const rows = await sb(
-        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=5&select=score_total,entrada_sugerida,assets(ticker,market,asset_type)`
+        `scores?date=eq.${today}&radar_mode=eq.moderado_corto&order=score_total.desc&limit=5&select=score_total,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,market,asset_type)`
       );
       if (!rows || rows.length === 0) {
         box.outerHTML = `<div class="lt-note" id="shortTop5Box">Todavía no hay ranking de corto plazo para hoy.</div>`;
@@ -294,15 +329,20 @@
       }
       box.outerHTML = `<div id="shortTop5Box">` + rows.map((r, i) => `
         <div class="lt-card">
-          <div class="lt-top" style="margin-bottom:0;">
+          <div class="lt-top">
             <div>
-              <div class="lt-name">#${i + 1}</div>
+              <div class="lt-name">#${i + 1} · ${r.assets.market}</div>
               <div class="lt-ticker">${r.assets.ticker}</div>
             </div>
             <div style="text-align:right;">
               <div class="lt-score mono" style="color:var(--gold);">${r.score_total}</div>
-              <div class="lt-name">$${fmtScorePrice(r.entrada_sugerida)}</div>
+              <div class="lt-name">SCORE</div>
             </div>
+          </div>
+          <div class="hero-grid">
+            ${priceCell('ENTRADA', r.entrada_sugerida)}
+            ${priceCell('OBJETIVO', r.objetivo_sugerido, 'var(--green)')}
+            ${priceCell('STOP LOSS', r.stop_loss, 'var(--coral)')}
           </div>
         </div>`).join('') + `</div>`;
     } catch {
@@ -348,9 +388,9 @@
               </div>`).join('')}
           </div>
           <div class="hero-grid">
-            <div><div class="l">ENTRADA</div><div class="v mono">$${fmtScorePrice(best.entrada_sugerida)}</div></div>
-            <div><div class="l">OBJETIVO</div><div class="v mono" style="color:var(--green)">$${fmtScorePrice(best.objetivo_sugerido)}</div></div>
-            <div><div class="l">STOP LOSS</div><div class="v mono" style="color:var(--coral)">$${fmtScorePrice(best.stop_loss)}</div></div>
+            ${priceCell('ENTRADA', best.entrada_sugerida)}
+            ${priceCell('OBJETIVO', best.objetivo_sugerido, 'var(--green)')}
+            ${priceCell('STOP LOSS', best.stop_loss, 'var(--coral)')}
           </div>
         </div>`;
     } catch {
@@ -362,7 +402,7 @@
     const box = document.getElementById('longTermBox');
     try {
       const rows = await sb(
-        `scores?radar_mode=eq.moderado_largo&order=score_total.desc&limit=5&select=score_total,calidad_empresarial,crecimiento,valoracion,entrada_sugerida,assets(ticker,name)`
+        `scores?radar_mode=eq.moderado_largo&order=score_total.desc&limit=5&select=score_total,calidad_empresarial,crecimiento,valoracion,entrada_sugerida,objetivo_sugerido,stop_loss,assets(ticker,name)`
       );
       if (!rows || rows.length === 0) {
         box.outerHTML = `<div class="lt-note" id="longTermBox">Todavía no hay empresas analizadas para mediano/largo plazo — el radar va rotando la lista de referencia unas 4 por día.</div>`;
@@ -390,6 +430,11 @@
                   <div class="lt-bar-track"><div class="lt-bar-fill" style="width:${b.val}%"></div></div>
                   <span class="lt-bar-val mono">${b.val}</span>
                 </div>`).join('')}
+            </div>
+            <div class="hero-grid" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--line);">
+              ${priceCell('ENTRADA', r.entrada_sugerida)}
+              ${priceCell('OBJETIVO', r.objetivo_sugerido, 'var(--green)')}
+              ${priceCell('STOP LOSS', r.stop_loss, 'var(--coral)')}
             </div>
           </div>`;
       }).join('') + `<div class="lt-note">Análisis fundamental (no de precio del día). La lista completa se cubre en rotación de a 4 empresas por día.</div></div>`;
@@ -424,6 +469,7 @@
 
   async function load() {
     try {
+      await fetchCCL();
       const [latest] = await sb('daily_prices?select=date&order=date.desc&limit=1');
       const [first] = await sb('daily_prices?select=date&order=date.asc&limit=1');
       if (!latest) throw new Error('sin datos');
@@ -458,7 +504,38 @@
     }
   }
 
+  async function loadCrypto() {
+    const box = document.getElementById('cryptoList');
+    try {
+      const res = await fetch(
+        'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=30&price_change_percentage=24h'
+      );
+      const coins = await res.json();
+      if (!Array.isArray(coins) || coins.length === 0) throw new Error('sin datos');
+
+      const sorted = [...coins]
+        .filter(c => c.price_change_percentage_24h != null)
+        .sort((a, b) => b.price_change_percentage_24h - a.price_change_percentage_24h)
+        .slice(0, 6);
+
+      box.outerHTML = `<div id="cryptoList">` + sorted.map(c => `
+        <div class="row">
+          <div class="left">
+            <span class="ticker">${c.symbol.toUpperCase()}</span>
+            <span class="meta">${c.name.toUpperCase()}</span>
+          </div>
+          <div class="right">
+            <div class="price mono">$${c.current_price.toLocaleString('es-AR', { maximumFractionDigits: c.current_price < 1 ? 4 : 2 })}</div>
+            <div class="pct mono ${c.price_change_percentage_24h >= 0 ? 'pos' : 'neg'}">${c.price_change_percentage_24h >= 0 ? '+' : ''}${c.price_change_percentage_24h.toFixed(2)}%</div>
+          </div>
+        </div>`).join('') + `<div class="lt-note">Top 30 por capitalización, ordenadas por variación 24h — solo precio, todavía sin score propio del radar.</div></div>`;
+    } catch {
+      box.outerHTML = `<div class="lt-note" id="cryptoList">No se pudo cargar la cotización de criptomonedas ahora.</div>`;
+    }
+  }
+
   load();
+  loadCrypto();
 </script>
 </body>
 </html>
