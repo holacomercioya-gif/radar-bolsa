@@ -51,14 +51,40 @@ async function supabaseRequest(path, { method = 'GET', body, prefer } = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+// Precio mínimo y variación máxima "creíble" para no dejar pasar penny stocks
+// ilíquidas ni saltos de precio que en realidad son ruido de datos (cotización
+// vieja/errónea de la fuente), no una oportunidad real.
+const MIN_PRICE = 10;
+const MAX_CREDIBLE_PCT_CHANGE = 50;
+
 async function fetchTopCandidates(today) {
   const rows = await supabaseRequest(
-    `daily_prices?date=eq.${today}&select=close,pct_change,assets(id,ticker,market)&order=pct_change.desc&limit=50`
+    `daily_prices?date=eq.${today}&select=close,volume,pct_change,assets(id,ticker,market)&order=pct_change.desc&limit=200`
   );
   return rows
-    .filter((r) => r.assets && r.assets.market === 'USA' && r.pct_change != null)
+    .filter((r) =>
+      r.assets &&
+      r.assets.market === 'USA' &&
+      r.pct_change != null &&
+      r.close >= MIN_PRICE &&
+      Math.abs(r.pct_change) <= MAX_CREDIBLE_PCT_CHANGE &&
+      (r.volume ?? 0) > 0
+    )
     .slice(0, TOP_N)
     .map((r) => ({ assetId: r.assets.id, ticker: r.assets.ticker, close: r.close, pctChange: r.pct_change }));
+}
+
+async function fetchIndexPctChange(today) {
+  try {
+    const [spyAsset] = await supabaseRequest('assets?ticker=eq.SPY&select=id&limit=1');
+    if (!spyAsset) return null;
+    const [row] = await supabaseRequest(
+      `daily_prices?date=eq.${today}&asset_id=eq.${spyAsset.id}&select=pct_change&limit=1`
+    );
+    return row ? row.pct_change : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchRSI(ticker) {
@@ -99,21 +125,23 @@ async function fetchNewsSentiment(ticker) {
   }
 }
 
-function computeScore({ pctChange, rsi, newsSentiment }) {
+function computeScore({ pctChange, rsi, newsSentiment, spyPctChange }) {
   const momentumScore = clamp(50 + pctChange * 5, 0, 100);
   const rsiScore = rsi != null ? clamp(100 - Math.abs(rsi - 58) * 2, 0, 100) : null;
   const newsScore = newsSentiment != null ? clamp((newsSentiment + 1) * 50, 0, 100) : null;
+  const fuerzaRelativaScore = spyPctChange != null ? clamp(50 + (pctChange - spyPctChange) * 8, 0, 100) : null;
 
   const parts = [
-    { value: momentumScore, weight: 0.3 },
-    { value: rsiScore, weight: 0.35 },
-    { value: newsScore, weight: 0.35 },
+    { value: momentumScore, weight: 0.25 },
+    { value: rsiScore, weight: 0.3 },
+    { value: newsScore, weight: 0.25 },
+    { value: fuerzaRelativaScore, weight: 0.2 },
   ].filter((p) => p.value != null);
 
   const weightSum = parts.reduce((s, p) => s + p.weight, 0);
   const total = parts.reduce((s, p) => s + p.value * p.weight, 0) / weightSum;
 
-  return { momentumScore, rsiScore, newsScore, total: Math.round(total) };
+  return { momentumScore, rsiScore, newsScore, fuerzaRelativaScore, total: Math.round(total) };
 }
 
 module.exports = async function handler(req, res) {
@@ -140,15 +168,18 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  const spyPctChange = await fetchIndexPctChange(today);
+
   const scoreRows = [];
   for (let i = 0; i < candidates.length; i++) {
     const c = candidates[i];
     const rsi = await fetchRSI(c.ticker);
     const newsSentiment = await fetchNewsSentiment(c.ticker);
-    const { momentumScore, rsiScore, newsScore, total } = computeScore({
+    const { momentumScore, rsiScore, newsScore, fuerzaRelativaScore, total } = computeScore({
       pctChange: c.pctChange,
       rsi,
       newsSentiment,
+      spyPctChange,
     });
 
     scoreRows.push({
@@ -159,6 +190,7 @@ module.exports = async function handler(req, res) {
       momentum: Math.round(momentumScore),
       tecnico: rsiScore != null ? Math.round(rsiScore) : null,
       noticias: newsScore != null ? Math.round(newsScore) : null,
+      fuerza_relativa: fuerzaRelativaScore != null ? Math.round(fuerzaRelativaScore) : null,
       entrada_sugerida: c.close,
       objetivo_sugerido: Math.round(c.close * 1.08 * 100) / 100,
       stop_loss: Math.round(c.close * 0.95 * 100) / 100,
