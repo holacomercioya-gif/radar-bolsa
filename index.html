@@ -257,12 +257,19 @@
     </div>`;
   }
 
-  function priceCell(label, usdValue, colorVar) {
-    const ars = fmtARS(usdValue);
+  function priceCell(label, value, colorVar, currency = 'USD') {
+    if (currency === 'ARS') {
+      return `
+        <div>
+          <div class="l">${label}</div>
+          <div class="v mono"${colorVar ? ` style="color:${colorVar}"` : ''}>AR$${fmtScorePrice(value)}</div>
+        </div>`;
+    }
+    const ars = fmtARS(value);
     return `
       <div>
         <div class="l">${label}</div>
-        <div class="v mono"${colorVar ? ` style="color:${colorVar}"` : ''}>$${fmtScorePrice(usdValue)}</div>
+        <div class="v mono"${colorVar ? ` style="color:${colorVar}"` : ''}>$${fmtScorePrice(value)}</div>
         ${ars ? `<div class="l" style="margin-top:2px;">≈ AR$${ars}</div>` : ''}
       </div>`;
   }
@@ -351,7 +358,7 @@
 
       heroBox.outerHTML = `
         <div class="hero" id="heroBox">
-          <div class="hero-label">OPORTUNIDAD DETECTADA · ${best.assets.market}</div>
+          <div class="hero-label">OPORTUNIDAD DETECTADA · ${marketLabel(best.assets.market)}</div>
           ${alertBanner(best.assets.ticker, alert)}
           <div class="hero-top">
             <div>
@@ -372,15 +379,19 @@
               </div>`).join('')}
           </div>
           <div class="hero-grid">
-            ${priceCell('ENTRADA', best.entrada_sugerida)}
-            ${priceCell('OBJETIVO', best.objetivo_sugerido, 'var(--green)')}
-            ${priceCell('STOP LOSS', best.stop_loss, 'var(--coral)')}
+            ${priceCell('ENTRADA', best.entrada_sugerida, undefined, best.assets.market === 'BYMA' ? 'ARS' : 'USD')}
+            ${priceCell('OBJETIVO', best.objetivo_sugerido, 'var(--green)', best.assets.market === 'BYMA' ? 'ARS' : 'USD')}
+            ${priceCell('STOP LOSS', best.stop_loss, 'var(--coral)', best.assets.market === 'BYMA' ? 'ARS' : 'USD')}
           </div>
           ${why ? `<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-size:11.5px; color:var(--text); line-height:1.5;"><b style="color:var(--muted);">¿Por qué?</b> ${why}</div>` : ''}
         </div>`;
     } catch {
       heroBox.outerHTML = `<div class="hero-pending" id="heroBox">Todavía no hay un score calculado para hoy.</div>`;
     }
+  }
+
+  function marketLabel(market) {
+    return market === 'BYMA' ? 'ARGENTINA' : market;
   }
 
   async function loadShortTop5(today) {
@@ -398,7 +409,7 @@
         <div class="lt-card">
           <div class="lt-top">
             <div>
-              <div class="lt-name">#${i + 1} · ${r.assets.market}</div>
+              <div class="lt-name">#${i + 1} · ${marketLabel(r.assets.market)}</div>
               <div class="lt-ticker">${r.assets.ticker}</div>
             </div>
             <div style="text-align:right;">
@@ -407,9 +418,9 @@
             </div>
           </div>
           <div class="hero-grid">
-            ${priceCell('ENTRADA', r.entrada_sugerida)}
-            ${priceCell('OBJETIVO', r.objetivo_sugerido, 'var(--green)')}
-            ${priceCell('STOP LOSS', r.stop_loss, 'var(--coral)')}
+            ${priceCell('ENTRADA', r.entrada_sugerida, undefined, r.assets.market === 'BYMA' ? 'ARS' : 'USD')}
+            ${priceCell('OBJETIVO', r.objetivo_sugerido, 'var(--green)', r.assets.market === 'BYMA' ? 'ARS' : 'USD')}
+            ${priceCell('STOP LOSS', r.stop_loss, 'var(--coral)', r.assets.market === 'BYMA' ? 'ARS' : 'USD')}
           </div>
         </div>`).join('') + `</div>`;
     } catch {
