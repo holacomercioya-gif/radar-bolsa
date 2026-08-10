@@ -1,4 +1,4 @@
-{
+
   "crons": [
     {
       "path": "/api/sync-market-data",
@@ -7,6 +7,10 @@
     {
       "path": "/api/enrich-scores",
       "schedule": "10 21 * * 1-5"
+    },
+    {
+      "path": "/api/enrich-argentina",
+      "schedule": "15 21 * * 1-5"
     },
     {
       "path": "/api/enrich-longterm",
@@ -28,6 +32,7 @@
   "functions": {
     "api/enrich-scores.js": { "maxDuration": 60 },
     "api/enrich-longterm.js": { "maxDuration": 60 },
-    "api/enrich-crypto.js": { "maxDuration": 30 }
+    "api/enrich-crypto.js": { "maxDuration": 30 },
+    "api/enrich-argentina.js": { "maxDuration": 30 }
   }
 }
