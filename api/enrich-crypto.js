@@ -89,9 +89,13 @@ function computeScore({ pctChange, rsi }) {
   const momentumScore = clamp(50 + pctChange * 3, 0, 100);
   const rsiScore = rsi != null ? clamp(100 - Math.abs(rsi - 58) * 2, 0, 100) : null;
 
-  const parts = [momentumScore, rsiScore].filter((v) => v != null);
-  const total = Math.round(parts.reduce((s, v) => s + v, 0) / parts.length);
+  if (rsiScore == null) {
+    // Sin RSI todavía, la señal es solo momentum — le ponemos un techo (80)
+    // para que no compita de igual a igual contra activos con más factores.
+    return { momentumScore, rsiScore: null, total: Math.round(clamp(momentumScore * 0.8, 0, 80)) };
+  }
 
+  const total = Math.round((momentumScore + rsiScore) / 2);
   return { momentumScore, rsiScore, total };
 }
 
