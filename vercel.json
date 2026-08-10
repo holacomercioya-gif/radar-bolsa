@@ -1,35 +1,17 @@
-
+{
   "crons": [
     {
-      "path": "/api/sync-market-data",
+      "path": "/api/run-stocks",
       "schedule": "0 21 * * 1-5"
     },
     {
-      "path": "/api/enrich-scores",
-      "schedule": "10 21 * * 1-5"
-    },
-    {
-      "path": "/api/enrich-argentina",
-      "schedule": "15 21 * * 1-5"
-    },
-    {
-      "path": "/api/enrich-longterm",
-      "schedule": "20 21 * * 1-5"
-    },
-    {
-      "path": "/api/close-recommendations",
-      "schedule": "25 21 * * 1-5"
-    },
-    {
-      "path": "/api/sync-crypto-data",
+      "path": "/api/run-crypto",
       "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/enrich-crypto",
-      "schedule": "30 21 * * *"
     }
   ],
   "functions": {
+    "api/run-stocks.js": { "maxDuration": 60 },
+    "api/run-crypto.js": { "maxDuration": 60 },
     "api/enrich-scores.js": { "maxDuration": 60 },
     "api/enrich-longterm.js": { "maxDuration": 60 },
     "api/enrich-crypto.js": { "maxDuration": 30 },
