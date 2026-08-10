@@ -74,14 +74,48 @@ async function fetchTopCandidates(today) {
     .map((r) => ({ assetId: r.assets.id, ticker: r.assets.ticker, close: r.close, pctChange: r.pct_change }));
 }
 
+async function fetchSPYFromAlphaVantage() {
+  try {
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=${ALPHA_VANTAGE_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const quote = data['Global Quote'];
+    if (!quote || !quote['05. price']) return null;
+    return {
+      close: parseFloat(quote['05. price']),
+      pctChange: parseFloat((quote['10. change percent'] || '0').replace('%', '')),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchIndexPctChange(today) {
   try {
     const [spyAsset] = await supabaseRequest('assets?ticker=eq.SPY&select=id&limit=1');
-    if (!spyAsset) return null;
-    const [row] = await supabaseRequest(
-      `daily_prices?date=eq.${today}&asset_id=eq.${spyAsset.id}&select=pct_change&limit=1`
-    );
-    return row ? row.pct_change : null;
+    if (spyAsset) {
+      const [row] = await supabaseRequest(
+        `daily_prices?date=eq.${today}&asset_id=eq.${spyAsset.id}&select=pct_change&limit=1`
+      );
+      if (row) return row.pct_change;
+    }
+
+    // No lo tenemos guardado para hoy todavía — lo traemos directo y lo guardamos
+    // para no tener que volver a pedirlo el resto del día.
+    const spyData = await fetchSPYFromAlphaVantage();
+    if (!spyData) return null;
+
+    const [asset] = await supabaseRequest('assets?on_conflict=ticker', {
+      method: 'POST',
+      body: [{ ticker: 'SPY', name: 'SPDR S&P 500 ETF', market: 'USA', asset_type: 'etf' }],
+      prefer: 'resolution=merge-duplicates,return=representation',
+    });
+    await supabaseRequest('daily_prices?on_conflict=asset_id,date', {
+      method: 'POST',
+      body: [{ asset_id: asset.id, date: today, close: spyData.close, pct_change: spyData.pctChange }],
+      prefer: 'resolution=merge-duplicates',
+    });
+    return spyData.pctChange;
   } catch {
     return null;
   }
